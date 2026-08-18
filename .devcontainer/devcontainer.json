@@ -8,8 +8,7 @@
   ],
 
   "containerEnv": {
-    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
-    "PGHOST": "host.docker.internal"
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
   },
 
 	"customizations": {
