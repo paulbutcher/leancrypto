@@ -6,7 +6,7 @@ import Lake
 open System Lake DSL
 
 package leancrypto where
-  version := v!"0.1.0"
+  version := v!"0.2.0"
   leanOptions := #[
     ⟨`autoImplicit, false⟩,
     ⟨`relaxedAutoImplicit, false⟩,
