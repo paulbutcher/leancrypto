@@ -3,6 +3,7 @@ Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Codec.Base32
+import Codec.Base64
 import Codec.Base64Url
 
 /-!
@@ -323,5 +324,139 @@ theorem decode_encode (bytes : List UInt8) : decode (encode bytes) = some bytes 
   | case4 a b c rest ih => exact rt3 a b c rest ih
 
 end Base64Url
+
+
+namespace Base64
+open Codec.Base64
+
+private theorem sextet_roundTrip : ∀ n ∈ List.range 64, decodeChar (encodeSextet n) = some n := by
+  decide
+
+private theorem sr {n : Nat} (h : n < 64) : decodeChar (encodeSextet n) = some n :=
+  sextet_roundTrip n (List.mem_range.mpr h)
+
+private theorem sextet_notPad : ∀ n ∈ List.range 64, (encodeSextet n == pad) = false := by
+  decide
+
+private theorem np {n : Nat} (h : n < 64) : (encodeSextet n == pad) = false :=
+  sextet_notPad n (List.mem_range.mpr h)
+
+private theorem decode_4 (x y z w : Char) : decode [x, y, z, w] = finalGroup x y z w := rfl
+
+private theorem decode_5 (x y z w v : Char) (rest : List Char) :
+    decode (x :: y :: z :: w :: v :: rest) =
+    match fullGroup x y z w, decode (v :: rest) with
+    | some bytes, some tail => some (bytes ++ tail)
+    | _, _ => none := rfl
+
+/-- Every encoding of a non-empty input begins with a character, which is what lets the group
+lemma below choose between the padded final group and a group with more to follow. -/
+private theorem encode_cons : ∀ (a : UInt8) (rest : List UInt8),
+    ∃ c cs, encode (a :: rest) = c :: cs
+  | _, [] => ⟨_, _, rfl⟩
+  | _, [_] => ⟨_, _, rfl⟩
+  | _, _ :: _ :: _ => ⟨_, _, rfl⟩
+
+private theorem group1 {s0 s1 : Nat} (h0 : s0 < 64) (h1 : s1 < 64) :
+    decode [encodeSextet s0, encodeSextet s1, pad, pad] = oneByte s0 s1 := by
+  simp [decode_4, finalGroup, sr h0, sr h1]
+
+private theorem group2 {s0 s1 s2 : Nat} (h0 : s0 < 64) (h1 : s1 < 64) (h2 : s2 < 64) :
+    decode [encodeSextet s0, encodeSextet s1, encodeSextet s2, pad] = twoBytes s0 s1 s2 := by
+  simp [decode_4, finalGroup, np h2, sr h0, sr h1, sr h2]
+
+private theorem group3_last {s0 s1 s2 s3 : Nat} (h0 : s0 < 64) (h1 : s1 < 64) (h2 : s2 < 64)
+    (h3 : s3 < 64) :
+    decode [encodeSextet s0, encodeSextet s1, encodeSextet s2, encodeSextet s3]
+      = some (threeBytes s0 s1 s2 s3) := by
+  simp [decode_4, finalGroup, np h3, fullGroup, sr h0, sr h1, sr h2, sr h3]
+
+private theorem group3 {s0 s1 s2 s3 : Nat} (h0 : s0 < 64) (h1 : s1 < 64) (h2 : s2 < 64)
+    (h3 : s3 < 64) {bs : List UInt8} (ih : decode (encode bs) = some bs) :
+    decode (encodeSextet s0 :: encodeSextet s1 :: encodeSextet s2 :: encodeSextet s3 :: encode bs)
+      = some (threeBytes s0 s1 s2 s3 ++ bs) := by
+  match bs with
+  | [] => simpa only [encode, List.append_nil] using group3_last h0 h1 h2 h3
+  | d :: t =>
+    obtain ⟨c, cs, hc⟩ := encode_cons d t
+    rw [hc] at ih ⊢
+    simp only [decode_5, fullGroup, sr h0, sr h1, sr h2, sr h3, ih]
+
+
+private theorem rt1 (a : UInt8) : decode (encode [a]) = some [a] := by
+  have ha : a.toNat < 256 := a.toNat_lt_size
+  simp only [encode]
+  rw [group1 (by omega : a.toNat / 4 < 64) (by omega : a.toNat % 4 * 16 < 64), oneByte,
+    show a.toNat % 4 * 16 % 16 = 0 by omega,
+    show a.toNat / 4 * 4 + a.toNat % 4 * 16 / 16 = a.toNat by omega, UInt8.ofNat_toNat]
+  rfl
+
+private theorem rt2 (a b : UInt8) : decode (encode [a, b]) = some [a, b] := by
+  have ha : a.toNat < 256 := a.toNat_lt_size
+  have hb : b.toNat < 256 := b.toNat_lt_size
+  simp only [encode]
+  rw [group2 (by omega : (a.toNat * 256 + b.toNat) / 1024 < 64)
+      (by omega : (a.toNat * 256 + b.toNat) / 16 % 64 < 64)
+      (by omega : (a.toNat * 256 + b.toNat) % 16 * 4 < 64),
+    twoBytes,
+    show (a.toNat * 256 + b.toNat) % 16 * 4 % 4 = 0 by omega,
+    show (a.toNat * 256 + b.toNat) / 1024 * 4 + (a.toNat * 256 + b.toNat) / 16 % 64 / 16
+      = a.toNat by omega,
+    show (a.toNat * 256 + b.toNat) / 16 % 64 % 16 * 16 + (a.toNat * 256 + b.toNat) % 16 * 4 / 4
+      = b.toNat by omega]
+  simp only [UInt8.ofNat_toNat]
+  rfl
+
+private theorem rt3 (a b c : UInt8) (rest : List UInt8)
+    (ih : decode (encode rest) = some rest) :
+    decode (encode (a :: b :: c :: rest)) = some (a :: b :: c :: rest) := by
+  have ha : a.toNat < 256 := a.toNat_lt_size
+  have hb : b.toNat < 256 := b.toNat_lt_size
+  have hc : c.toNat < 256 := c.toNat_lt_size
+  simp only [encode]
+  rw [group3 (by omega : (a.toNat * 65536 + b.toNat * 256 + c.toNat) / 262144 < 64)
+      (by omega : (a.toNat * 65536 + b.toNat * 256 + c.toNat) / 4096 % 64 < 64)
+      (by omega : (a.toNat * 65536 + b.toNat * 256 + c.toNat) / 64 % 64 < 64)
+      (by omega : (a.toNat * 65536 + b.toNat * 256 + c.toNat) % 64 < 64) ih,
+    threeBytes,
+    show (a.toNat * 65536 + b.toNat * 256 + c.toNat) / 262144 * 4
+      + (a.toNat * 65536 + b.toNat * 256 + c.toNat) / 4096 % 64 / 16 = a.toNat by omega,
+    show (a.toNat * 65536 + b.toNat * 256 + c.toNat) / 4096 % 64 % 16 * 16
+      + (a.toNat * 65536 + b.toNat * 256 + c.toNat) / 64 % 64 / 4 = b.toNat by omega,
+    show (a.toNat * 65536 + b.toNat * 256 + c.toNat) / 64 % 64 % 4 * 64
+      + (a.toNat * 65536 + b.toNat * 256 + c.toNat) % 64 = c.toNat by omega]
+  simp only [UInt8.ofNat_toNat, List.cons_append, List.nil_append]
+
+theorem decode_encode (bytes : List UInt8) : decode (encode bytes) = some bytes := by
+  induction bytes using encode.induct with
+  | case1 => rfl
+  | case2 a => exact rt1 a
+  | case3 a b => exact rt2 a b
+  | case4 a b c rest ih => exact rt3 a b c rest ih
+
+private theorem keep_range : ∀ n ∈ List.range 64, keep (encodeSextet n) = true := by decide
+
+private theorem keep_pad : keep pad = true := by decide
+
+private theorem alphabet_length : alphabet.length = 64 := rfl
+
+private theorem keep_sextet (n : Nat) : keep (encodeSextet n) = true := by
+  rcases Nat.lt_or_ge n 64 with h | h
+  · exact keep_range n (List.mem_range.mpr h)
+  · have hlen : alphabet.length ≤ n := by rw [alphabet_length]; omega
+    rw [show encodeSextet n = pad by simp [encodeSextet, List.getElem?_eq_none hlen]]
+    exact keep_pad
+
+private theorem filter_encode (bytes : List UInt8) : (encode bytes).filter keep = encode bytes := by
+  induction bytes using encode.induct with
+  | case1 => rfl
+  | case2 a => simp [encode, keep_sextet, keep_pad]
+  | case3 a b => simp [encode, keep_sextet, keep_pad]
+  | case4 a b c rest ih => simp [encode, keep_sextet, ih]
+
+theorem decodeString_encodeString (bytes : ByteArray) :
+    decodeString (encodeString bytes) = some bytes := by
+  simp [decodeString, encodeString, String.toList_ofList, filter_encode, decode_encode]
+end Base64
 
 end Tests.Encodings
