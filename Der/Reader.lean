@@ -2,6 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
 
 /-!
 As much of DER (X.690) as reading a public key out of a certificate needs: `SEQUENCE`, `INTEGER`,
@@ -18,6 +19,8 @@ becomes a way to make one certificate read as two different things.
 Reading is bounded by an explicit `limit` rather than by the size of the array, so that a nested
 structure cannot read its way out of its parent and into whatever follows.
 -/
+
+@[expose] public section
 
 namespace Der
 
@@ -42,7 +45,7 @@ def Tlv.next (tlv : Tlv) : Nat := tlv.start + tlv.length
 def byteAt (der : ByteArray) (limit index : Nat) : Option UInt8 :=
   if index < limit then der.data[index]? else none
 
-private def readBase256 (der : ByteArray) (limit : Nat) : Nat → Nat → Nat → Option Nat
+def readBase256 (der : ByteArray) (limit : Nat) : Nat → Nat → Nat → Option Nat
   | 0, _, acc => some acc
   | count + 1, index, acc =>
     match byteAt der limit index with

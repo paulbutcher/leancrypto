@@ -2,6 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
 
 /-!
 Lowercase hexadecimal.
@@ -10,6 +11,8 @@ Encoding is lowercase and always two characters per byte. Both matter to a consu
 digest into a signature: a request signed with uppercase hex, or with a leading zero dropped, is
 rejected with a mismatch that says nothing about which of the two it was.
 -/
+
+@[expose] public section
 
 namespace Codec.Hex
 

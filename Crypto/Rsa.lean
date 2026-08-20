@@ -2,8 +2,10 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Crypto.Compare
-import Crypto.Sha256
+module
+
+public import Crypto.Compare
+public import Crypto.Sha256
 
 /-!
 RSASSA-PKCS1-v1_5 signature verification with SHA-256 (RFC 8017 §8.2.2).
@@ -23,6 +25,8 @@ Bleichenbacher forgery of 2006: with a low exponent an attacker can construct a 
 lenient parser accepts without the private key. It has been reimplemented independently many
 times since. Encoding the expectation leaves no parser to be lenient.
 -/
+
+@[expose] public section
 
 namespace Crypto.Rsa
 

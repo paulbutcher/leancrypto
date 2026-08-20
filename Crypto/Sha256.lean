@@ -2,6 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
 
 /-!
 SHA-256 (FIPS 180-4).
@@ -10,6 +11,8 @@ Written against the published test vectors rather than proved: the round functio
 on machine words with no structure a proof could exploit, and a golden vector catches every
 transcription error the code can contain.
 -/
+
+public section
 
 namespace Crypto.Sha256
 

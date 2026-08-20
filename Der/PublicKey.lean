@@ -2,8 +2,10 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
+
 import Codec.Base64
-import Crypto.Rsa
+public import Crypto.Rsa
 import Der.Reader
 
 /-!
@@ -21,6 +23,8 @@ that TLS validates the chain on its behalf. A caller that fetches over plain HTT
 from whatever URL the payload it is about to verify happened to name, has built a verifier that
 confirms the attacker signed the attacker's message.
 -/
+
+public section
 
 namespace Der
 

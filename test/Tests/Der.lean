@@ -2,6 +2,8 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
+
 import Codec.Base64
 import Codec.Hex
 import Der
@@ -108,7 +110,7 @@ private def mutate (der : ByteArray) (index : Nat) (byte : UInt8) : ByteArray :=
 
 private def truncate (der : ByteArray) (length : Nat) : ByteArray := der.extract 0 length
 
-def checks : List (String × Bool) :=
+public def checks : List (String × Bool) :=
   [ ("the key of a real certificate, from its PEM",
       Der.publicKeyOfPem certificatePem == some expected),
     ("the key of a real certificate, from its DER",

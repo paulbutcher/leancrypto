@@ -2,6 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
 
 /-!
 Base64 (RFC 4648 §4) with `=` padding, over the standard `+/` alphabet.
@@ -17,6 +18,8 @@ long as the final group is short, so a byte string has exactly one accepted enco
 Line breaks are dropped before decoding, because PEM wraps at 64 columns and a caller that had to
 strip them itself would one day forget.
 -/
+
+@[expose] public section
 
 namespace Codec.Base64
 

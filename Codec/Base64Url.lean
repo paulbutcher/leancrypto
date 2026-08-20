@@ -2,6 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
 
 /-!
 Base64url (RFC 4648 §5) without padding.
@@ -10,6 +11,8 @@ Bits beyond the encoded bytes are required to be zero, so a byte string has exac
 encoding. Without that check a value would have several spellings, and a store keyed on the digest
 of the spelling would treat them as different values.
 -/
+
+@[expose] public section
 
 namespace Codec.Base64Url
 

@@ -2,6 +2,8 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
+
 import Codec.Hex
 import Crypto.Rsa
 
@@ -225,7 +227,7 @@ private def keyShort : Rsa.PublicKey := keyOfHex modulusShort exponentShort
 
 private def keyCrafted : Rsa.PublicKey := keyOfHex modulusCrafted exponentCrafted
 
-def checks : List (String × Bool) :=
+public def checks : List (String × Bool) :=
   [ ("CAVP SigVer15 2048/SHA-256 case A1, Result = P",
       verify keyA (bytesOfHex messageA1) signatureA1),
     ("CAVP SigVer15 2048/SHA-256 case A2, Result = F",

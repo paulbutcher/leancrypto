@@ -2,6 +2,8 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
+
 import Crypto.Rsa
 
 /-!
@@ -20,7 +22,7 @@ open Crypto.Rsa
 theorem powMod_eq (base exponent modulus : Nat) :
     powMod base exponent modulus = base ^ exponent % modulus := by
   induction base, exponent using powMod.induct (modulus := modulus) with
-  | case1 base => rw [powMod]; simp
+  | case1 base => rw [powMod.eq_def]; simp
   | case2 base exponent hne heven ih =>
     rw [powMod.eq_def, if_neg hne, if_pos heven, ih, ← Nat.pow_mod, ← Nat.pow_two,
       ← Nat.pow_mul, show 2 * (exponent / 2) = exponent by omega]

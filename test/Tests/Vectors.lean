@@ -2,8 +2,11 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
+
 import Codec.Hex
 import Crypto.Hmac
+import Crypto.Sha256
 
 /-!
 Published vectors for SHA-256 (FIPS 180-4) and HMAC-SHA256 (RFC 4231). These are examples rather
@@ -20,7 +23,7 @@ private def bytesOf (s : String) : ByteArray := s.toUTF8
 
 private def repeated (byte : UInt8) (count : Nat) : ByteArray := ⟨Array.replicate count byte⟩
 
-def checks : List (String × Bool) :=
+public def checks : List (String × Bool) :=
   [ ("sha256 of the empty message",
       hex (Sha256.hash ⟨#[]⟩) ==
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),

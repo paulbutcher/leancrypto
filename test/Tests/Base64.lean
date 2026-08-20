@@ -2,6 +2,8 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
+
 import Codec.Base64
 
 /-!
@@ -15,7 +17,10 @@ with the published spelling, which no round-trip proof establishes.
 namespace Tests.Base64Codec
 open Codec.Base64
 
-private def utf8 (s : String) : ByteArray := s.toUTF8
+/-- The projection rather than `String.toUTF8`, which core does not expose, so that the vectors
+below still reduce in the kernel. The two are the same bytes: `toUTF8` is defined as this
+projection. -/
+private def utf8 (s : String) : ByteArray := s.toByteArray
 
 theorem encode_rfc4648 :
     encodeString (utf8 "") = ""
