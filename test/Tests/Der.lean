@@ -160,23 +160,107 @@ running. Each of these is a way to spell something two ways, and a reader that a
 reader through which one input can be made to mean two things.
 -/
 
+/--
+The BER indefinite length form is refused rather than read. DER has no such form, and a reader that
+accepted it would end a value wherever a pair of zero bytes happened to fall rather than where a
+length said, which is a way to make one byte string mean two things.
+
+The array is a `SEQUENCE` tag `0x30`, the length octet `0x80` that BER reads as "contents until an
+end-of-contents marker", and the two zero bytes of that marker. The limit is `4` and the index is
+`0`, so the whole array is in scope and nothing is refused for want of input; `readTlv` answering
+`none` is the refusal itself. `rfl` closes it, so this holds by reduction in the kernel rather than
+by running the reader.
+-/
 theorem reject_indefinite_length : Der.readTlv ⟨#[0x30, 0x80, 0x00, 0x00]⟩ 4 0 = none := by rfl
 
+/--
+A value whose length reaches past its container is refused. Reading it would take bytes belonging to
+whatever follows, and inside a certificate that is how a nested structure reads its way out of its
+parent and into the field after it.
+
+`0x30` is `SEQUENCE` and `0x05` says five content bytes follow, of which the array holds one. The
+limit `3` is the whole array, so those contents would end at index `7`, past it, and `readTlv`
+answers `none`. Because the reader is bounded by its `limit` argument rather than by the size of the
+array, the same refusal applies to a value nested inside a larger buffer, where the bytes it
+overruns into do exist.
+-/
 theorem reject_length_past_end : Der.readTlv ⟨#[0x30, 0x05, 0x00]⟩ 3 0 = none := by rfl
 
+/--
+A length small enough for the short form must be spelled in the short form. Allowing both spellings
+would give one value two encodings, and so one certificate two byte strings that read alike, which
+is the difference between a fingerprint identifying a certificate and merely accompanying it.
+
+`0x02` is `INTEGER`; `0x81 0x01` is the long form saying "one length octet follows, and it is 1",
+which the short form spells as the single octet `0x01`; `0x05` is the content byte, so the input is
+well-formed apart from the spelling. Limit `4` and index `0` cover the whole array. `readLength`
+requires a long-form length to be at least `0x80`, which `1` is not, so it answers `none` and
+`readNat` passes that on.
+-/
 theorem reject_long_form_for_a_short_length :
     Der.readNat ⟨#[0x02, 0x81, 0x01, 0x05]⟩ 4 0 = none := by rfl
 
+/--
+A long-form length padded with a leading zero octet is refused. This is the same one-value-two-
+spellings hazard as the long form for a short length, in the shape a parser is most likely to wave
+through, since the padded length denotes exactly the number the unpadded one does.
+
+`0x02` is `INTEGER` and `0x82` says two length octets follow; those octets are `0x00 0x01`, which
+denotes 1 with a byte to spare, and `0x05` is the content the length calls for. Limit `5` is the
+whole array, so nothing is refused for want of input. `readLength` reads the octet immediately after
+the count and refuses when it is zero, so `readNat` yields `none`.
+-/
 theorem reject_length_with_a_leading_zero :
     Der.readNat ⟨#[0x02, 0x82, 0x00, 0x01, 0x05]⟩ 5 0 = none := by rfl
 
+/--
+The same padding refused at the width an encoder is most likely to produce it. A 32-bit length is
+naturally written in four octets, so a reader that checked only that the first octet was non-zero,
+or checked nothing at all, would still find a length here that reads as 1.
+
+`0x30` is `SEQUENCE` and `0x84` says four length octets follow; `0x00 0x00 0x00 0x01` denotes 1 with
+three bytes to spare, and `0x05` is the single content byte that length calls for, so the `none` is
+the padding alone rather than a value that is malformed some other way. Limit `7` and index `0`
+cover the whole array.
+-/
 theorem reject_padded_long_form_length :
     Der.readTlv ⟨#[0x30, 0x84, 0x00, 0x00, 0x00, 0x01, 0x05]⟩ 7 0 = none := by rfl
 
+/--
+The long form is read, and read correctly, not merely refused when it is misused. Without this the
+refusals around it would all be satisfied by a reader that rejected every long-form length, and such
+a reader would fail on every certificate, since no real key is short enough to be spelled without
+one.
+
+`0x81` says one length octet follows and `0x80` is that octet, denoting 128, the smallest length the
+long form is permitted to spell. The answer `some (128, 2)` gives that value together with index
+`2`, where the contents would begin, one past the two length bytes. Limit `2` is the whole array;
+`readLength` reads only the length, so it does not require the contents to be present.
+-/
 theorem accept_long_form_length : Der.readLength ⟨#[0x81, 0x80]⟩ 2 0 = some (128, 2) := by rfl
 
+/--
+A negative `INTEGER` is refused rather than reinterpreted as a large positive one. DER integers are
+two's complement, so a modulus read from a negative encoding would be a different number from the
+one the issuer signed, and the signature would then be checked against a key nobody issued.
+
+`0x02` is `INTEGER`, `0x01` says one content byte, and `0xff` is that byte, its top bit set and so
+negative. `readNat` guards the first content byte below `0x80` and answers `none` when that guard
+fails. Limit `3` and index `0` cover the whole array, so this is a refusal on the value rather than
+on the extent.
+-/
 theorem reject_negative_integer : Der.readNat ⟨#[0x02, 0x01, 0xff]⟩ 3 0 = none := by rfl
 
+/--
+A well-formed small `INTEGER` is read, and gives both its value and its end. This is the
+counterweight to the refusals beside it, every one of which a reader that rejected all integers
+would satisfy.
+
+The array is the three-byte shape of `reject_negative_integer` with content `0x05`, a byte whose top
+bit is clear and which therefore needs no leading zero. The answer `some (5, 3)` is the value 5
+together with index `3`, one past the last content byte, which is where the caller resumes reading;
+a reader that returned the right value at the wrong index would fail here too.
+-/
 theorem accept_short_integer : Der.readNat ⟨#[0x02, 0x01, 0x05]⟩ 3 0 = some (5, 3) := by rfl
 
 end Tests.Der
