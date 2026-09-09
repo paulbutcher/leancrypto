@@ -22,7 +22,7 @@ structure cannot read its way out of its parent and into whatever follows.
 
 @[expose] public section
 
-namespace Der
+namespace Leancrypto.Der
 
 def sequenceTag : UInt8 := 0x30
 def integerTag : UInt8 := 0x02
@@ -133,4 +133,4 @@ def readNull (der : ByteArray) (limit index : Nat) : Option Nat := do
   guard (tlv.length = 0)
   some tlv.next
 
-end Der
+end Leancrypto.Der

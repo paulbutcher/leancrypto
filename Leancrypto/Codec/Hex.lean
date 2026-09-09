@@ -14,7 +14,7 @@ rejected with a mismatch that says nothing about which of the two it was.
 
 @[expose] public section
 
-namespace Codec.Hex
+namespace Leancrypto.Codec.Hex
 
 def digits : List Char := "0123456789abcdef".toList
 
@@ -41,4 +41,4 @@ def encodeString (bytes : ByteArray) : String := String.ofList (encode bytes.dat
 def decodeString (s : String) : Option ByteArray :=
   (decode s.toList).map fun bytes => ⟨bytes.toArray⟩
 
-end Codec.Hex
+end Leancrypto.Codec.Hex

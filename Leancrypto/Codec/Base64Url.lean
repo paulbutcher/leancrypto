@@ -14,7 +14,7 @@ of the spelling would treat them as different values.
 
 @[expose] public section
 
-namespace Codec.Base64Url
+namespace Leancrypto.Codec.Base64Url
 
 def alphabet : List Char :=
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".toList
@@ -69,4 +69,4 @@ def encodeString (bytes : ByteArray) : String := String.ofList (encode bytes.dat
 def decodeString (s : String) : Option ByteArray :=
   (decode s.toList).map fun bytes => ⟨bytes.toArray⟩
 
-end Codec.Base64Url
+end Leancrypto.Codec.Base64Url

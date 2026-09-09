@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-import Codec.Hex
-import Crypto.Rsa
+import Leancrypto.Codec.Hex
+import Leancrypto.Rsa
 
 /-!
 Verification vectors, both kinds.
@@ -31,9 +31,9 @@ The negatives matter more than the positives. Every forgery in this family passe
 -/
 
 namespace Tests.RsaVectors
-open Crypto
+open Leancrypto
 
-private def bytesOfHex (hex : String) : ByteArray := (Codec.Hex.decodeString hex).getD ⟨#[]⟩
+private def bytesOfHex (hex : String) : ByteArray := (Leancrypto.Codec.Hex.decodeString hex).getD ⟨#[]⟩
 
 private def natOfHex (hex : String) : Nat := Rsa.natOfBytes (bytesOfHex hex)
 
@@ -41,7 +41,7 @@ private def keyOfHex (modulus exponent : String) : Rsa.PublicKey :=
   { modulus := natOfHex modulus, exponent := natOfHex exponent }
 
 private def verify (key : Rsa.PublicKey) (message : ByteArray) (signature : String) : Bool :=
-  Rsa.verifyPkcs1v15Sha256 key message (bytesOfHex signature)
+  Rsa.verifyPkcs1v15 .sha256 key message (bytesOfHex signature)
 
 private def modulusA : String :=
   "c47abacc2a84d56f3614d92fd62ed36ddde459664b9301dcd1d61781cfcc026b" ++
@@ -244,13 +244,13 @@ public def checks : List (String × Bool) :=
       verify keyB (bytesOfHex messageA1) signatureA1 == false),
     -- The length check comes before the arithmetic, and these are the two ways to miss it.
     ("a signature one byte short is refused",
-      Rsa.verifyPkcs1v15Sha256 keyA (bytesOfHex messageA1)
+      Rsa.verifyPkcs1v15 .sha256 keyA (bytesOfHex messageA1)
         ((bytesOfHex signatureA1).extract 0 255) == false),
     ("a signature one byte long is refused",
-      Rsa.verifyPkcs1v15Sha256 keyA (bytesOfHex messageA1)
+      Rsa.verifyPkcs1v15 .sha256 keyA (bytesOfHex messageA1)
         (⟨#[0x00]⟩ ++ bytesOfHex signatureA1) == false),
     ("an empty signature is refused",
-      Rsa.verifyPkcs1v15Sha256 keyA (bytesOfHex messageA1) ⟨#[]⟩ == false),
+      Rsa.verifyPkcs1v15 .sha256 keyA (bytesOfHex messageA1) ⟨#[]⟩ == false),
     -- A 1024-bit modulus is refused for its size, not for disagreeing: the same vector is
     -- recorded as passing in the CAVP file.
     ("a 1024-bit modulus is refused",

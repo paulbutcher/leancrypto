@@ -4,12 +4,17 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-import Codec.Base32
-import Codec.Base64
-import Codec.Base64Url
+import Leancrypto.Codec.Base32
+import Leancrypto.Codec.Base64
+import Leancrypto.Codec.Base64Url
 
 /-!
-Round-trip theorems for the two encodings.
+Round-trip theorems for the three encodings, and canonicity theorems for two of them.
+
+The round trip says nothing is lost; canonicity says nothing else is accepted, which is the half a
+consumer needs against an input an attacker wrote. Crockford base32 has no canonicity theorem
+because it is false of that decoder by design: the decoder folds case and the substitutions a
+person makes when transcribing, so a byte string has several spellings it will read.
 
 Two shapes here are for elaboration cost rather than clarity, and both matter: the file is
 minutes slower without them. `decode` is unfolded through `rfl` lemmas, because applying the
@@ -22,8 +27,21 @@ unfold the alphabet.
 
 namespace Tests.Encodings
 
+/--
+A natural below 256 survives being made into a byte. The round-trip theorems run from bytes to
+characters and never need this; the canonicity theorems run the other way, and every byte they
+produce is assembled from sextets whose values have to be read back out of it afterwards.
+
+`h : v < 256` is the range a `UInt8` holds, `UInt8.ofNat` truncates to that range, and `.toNat`
+reads the result back; the equation says the truncation did nothing. Above 256 the statement would
+be false rather than vacuous, so the hypothesis carries the weight, and it is discharged at each
+use site from the bounds on the sextets that built the byte.
+-/
+private theorem toNat_ofNat {v : Nat} (h : v < 256) : (UInt8.ofNat v).toNat = v := by
+  simp [Nat.mod_eq_of_lt h]
+
 namespace Base32
-open Codec.Base32
+open Leancrypto.Codec.Base32
 
 /--
 Every value five bits can take survives being written as a Crockford character and read back. The
@@ -407,7 +425,7 @@ theorem decode_encode (bytes : List UInt8) : decode (encode bytes) = some bytes 
 end Base32
 
 namespace Base64Url
-open Codec.Base64Url
+open Leancrypto.Codec.Base64Url
 
 /--
 Every value six bits can take survives being written as a base64url character and read back. This
@@ -611,15 +629,118 @@ theorem decode_encode (bytes : List UInt8) : decode (encode bytes) = some bytes 
   | case3 a b => exact rt2 a b
   | case4 a b c rest ih => exact rt3 a b c rest ih
 
+/--
+A character the decoder accepts is the one the encoder would have written for the sextet it answers
+with. This is what makes the alphabet an injection rather than a lookup table, and every rejection
+the canonicity theorem below accounts for rests on it.
+
+`decodeChar c = some n` says searching `alphabet` for `c` found it at position `n`. The conclusion
+is that `n` is a sextet value, below 64, and that `encodeSextet n`, the character sitting at
+position `n`, is `c` again. `findIdx?` answering `some n` supplies both halves: the index is within
+the list and the element there matches. Only the alphabet's length is used, not its contents, but
+it is proved here rather than borrowed because the two alphabets are different lists.
+-/
+private theorem decodeChar_sound {c : Char} {n : Nat} (h : decodeChar c = some n) :
+    n < 64 ∧ encodeSextet n = c := by
+  rw [decodeChar, List.findIdx?_eq_some_iff_getElem] at h
+  obtain ⟨hn, hp, -⟩ := h
+  exact ⟨hn, by simpa [encodeSextet, List.getElem?_eq_getElem hn] using hp⟩
+
+/--
+Every character list the decoder accepts is the encoding of what it hands back. This is the claim a
+consumer needs against a rewritten token: a byte string has one spelling, so two different strings
+never decode to the same bytes, and a signature over one of them cannot be carried to another. It
+also settles each individual rejection at once, because a string carrying `=`, `+` or `/`, a string
+of length `4n + 1`, and a string whose final sextet has bits set below the bytes it carries are all
+strings `encode` cannot produce.
+
+`decode cs = some bs` is the decoder succeeding on `cs` and answering `bs`, and `encode bs = cs`
+says `cs` was that answer's own encoding, character for character. The induction is over
+`decode.induct`, so the cases are the decoder's own arms, the ones answering `none` included, where
+the hypothesis is contradictory and there is nothing to prove. This is the converse of
+`decode_encode` and neither implies the other: that one says nothing is lost, this one says nothing
+else is accepted.
+-/
+theorem encode_decode (cs : List Char) (bs : List UInt8) (h : decode cs = some bs) :
+    encode bs = cs := by
+  induction cs using decode.induct generalizing bs with
+  | case1 => simp [decode] at h; subst h; rfl
+  | case2 c => simp [decode] at h
+  | case3 x y s0 s1 h1 h0 =>
+    obtain ⟨hs0, hx⟩ := decodeChar_sound h0
+    obtain ⟨hs1, hy⟩ := decodeChar_sound h1
+    simp only [decode_2, h0, h1, oneByte] at h
+    split at h
+    · rename_i hq
+      have hq' : s1 % 16 = 0 := by simpa using hq
+      obtain rfl : bs = [UInt8.ofNat (s0 * 4 + s1 / 16)] := (Option.some.inj h).symm
+      simp only [encode, toNat_ofNat (show s0 * 4 + s1 / 16 < 256 by omega)]
+      rw [show (s0 * 4 + s1 / 16) / 4 = s0 by omega,
+        show (s0 * 4 + s1 / 16) % 4 * 16 = s1 by omega, hx, hy]
+    · simp at h
+  | case4 x y hno =>
+    rw [decode_2] at h
+    split at h
+    · exact (hno _ _ ‹_› ‹_›).elim
+    · simp at h
+  | case5 x y z s0 s1 s2 h2 h1 h0 =>
+    obtain ⟨hs0, hx⟩ := decodeChar_sound h0
+    obtain ⟨hs1, hy⟩ := decodeChar_sound h1
+    obtain ⟨hs2, hz⟩ := decodeChar_sound h2
+    simp only [decode_3, h0, h1, h2, twoBytes] at h
+    split at h
+    · rename_i hq
+      have hq' : s2 % 4 = 0 := by simpa using hq
+      obtain rfl : bs = [UInt8.ofNat (s0 * 4 + s1 / 16), UInt8.ofNat (s1 % 16 * 16 + s2 / 4)] :=
+        (Option.some.inj h).symm
+      simp only [encode, toNat_ofNat (show s0 * 4 + s1 / 16 < 256 by omega),
+        toNat_ofNat (show s1 % 16 * 16 + s2 / 4 < 256 by omega)]
+      rw [show ((s0 * 4 + s1 / 16) * 256 + (s1 % 16 * 16 + s2 / 4)) / 1024 = s0 by omega,
+        show ((s0 * 4 + s1 / 16) * 256 + (s1 % 16 * 16 + s2 / 4)) / 16 % 64 = s1 by omega,
+        show ((s0 * 4 + s1 / 16) * 256 + (s1 % 16 * 16 + s2 / 4)) % 16 * 4 = s2 by omega,
+        hx, hy, hz]
+    · simp at h
+  | case6 x y z hno =>
+    rw [decode_3] at h
+    split at h
+    · exact (hno _ _ _ ‹_› ‹_› ‹_›).elim
+    · simp at h
+  | case7 x y z w rest s0 s1 s2 s3 tail hrest h3 h2 h1 h0 ih =>
+    obtain ⟨hs0, hx⟩ := decodeChar_sound h0
+    obtain ⟨hs1, hy⟩ := decodeChar_sound h1
+    obtain ⟨hs2, hz⟩ := decodeChar_sound h2
+    obtain ⟨hs3, hw⟩ := decodeChar_sound h3
+    rw [decode_4, h0, h1, h2, h3, hrest] at h
+    obtain rfl : bs = threeBytes s0 s1 s2 s3 ++ tail := (Option.some.inj h).symm
+    simp only [threeBytes, List.cons_append, List.nil_append, encode,
+      toNat_ofNat (show s0 * 4 + s1 / 16 < 256 by omega),
+      toNat_ofNat (show s1 % 16 * 16 + s2 / 4 < 256 by omega),
+      toNat_ofNat (show s2 % 4 * 64 + s3 < 256 by omega)]
+    rw [show ((s0 * 4 + s1 / 16) * 65536 + (s1 % 16 * 16 + s2 / 4) * 256 + (s2 % 4 * 64 + s3))
+        / 262144 = s0 by omega,
+      show ((s0 * 4 + s1 / 16) * 65536 + (s1 % 16 * 16 + s2 / 4) * 256 + (s2 % 4 * 64 + s3))
+        / 4096 % 64 = s1 by omega,
+      show ((s0 * 4 + s1 / 16) * 65536 + (s1 % 16 * 16 + s2 / 4) * 256 + (s2 % 4 * 64 + s3))
+        / 64 % 64 = s2 by omega,
+      show ((s0 * 4 + s1 / 16) * 65536 + (s1 % 16 * 16 + s2 / 4) * 256 + (s2 % 4 * 64 + s3))
+        % 64 = s3 by omega,
+      hx, hy, hz, hw, ih tail hrest]
+  | case8 x y z w rest hno ih =>
+    rw [decode_4] at h
+    split at h
+    · exact (hno _ _ _ _ _ ‹_› ‹_› ‹_› ‹_› ‹_›).elim
+    · simp at h
+
+
 end Base64Url
 
 
 namespace Base64
-open Codec.Base64
+open Leancrypto.Codec.Base64
 
 /--
 Every value six bits can take survives being written as a standard base64 character and read back.
-The `+` and `/` that end this alphabet are exactly the two characters `Codec.Base64Url` must not
+The `+` and `/` that end this alphabet are exactly the two characters `Leancrypto.Codec.Base64Url` must not
 accept, so each codec establishes this against its own alphabet rather than sharing one proof.
 
 `List.range 64` is `0` through `63`, exactly the sextet values; `encodeSextet n` indexes `alphabet`
@@ -946,6 +1067,166 @@ rather than anything established here.
 theorem decodeString_encodeString (bytes : ByteArray) :
     decodeString (encodeString bytes) = some bytes := by
   simp [decodeString, encodeString, String.toList_ofList, filter_encode, decode_encode]
+/--
+A character the decoder accepts is the one the encoder would have written for the sextet it answers
+with. The same fact as in the base64url namespace and not the same proof, because the two alphabets
+disagree in their last two positions and this one has to be about this list.
+
+`decodeChar c = some n` says searching `alphabet` for `c` found it at position `n`. The conclusion
+is that `n` is a sextet value, below 64, and that `encodeSextet n` is `c` again. `findIdx?`
+answering `some n` gives both: the index is within the list and the element there matches. `pad` is
+not in the alphabet, so no `n` at all answers for `=`, which is what keeps padding out of the
+positions where the encoder never writes it.
+-/
+private theorem decodeChar_sound {c : Char} {n : Nat} (h : decodeChar c = some n) :
+    n < 64 ∧ encodeSextet n = c := by
+  rw [decodeChar, List.findIdx?_eq_some_iff_getElem] at h
+  obtain ⟨hn, hp, -⟩ := h
+  exact ⟨hn, by simpa [encodeSextet, List.getElem?_eq_getElem hn] using hp⟩
+
+/--
+The three bytes of a full group, in front of anything at all, encode back to the four characters
+its sextets name. A full group is reached by two different arms of the decoder, the four-character
+input and the recursive one, so the step is stated once over an arbitrary tail rather than twice.
+
+The four bounds are what `encodeSextet` needs in order to invert `decodeChar`. `threeBytes` packs
+the sextets into three bytes and the conclusion cuts the same four sextets back out of them, leaving
+`encode tail` where it was. Each byte is below 256, so `toNat_ofNat` applies, and the twenty-four
+bit number the three bytes make divides back into exactly the sextets it was built from.
+-/
+private theorem encode_threeBytes {s0 s1 s2 s3 : Nat} (h0 : s0 < 64) (h1 : s1 < 64) (h2 : s2 < 64)
+    (h3 : s3 < 64) (tail : List UInt8) :
+    encode (threeBytes s0 s1 s2 s3 ++ tail)
+      = encodeSextet s0 :: encodeSextet s1 :: encodeSextet s2 :: encodeSextet s3
+        :: encode tail := by
+  simp only [threeBytes, List.cons_append, List.nil_append, encode,
+    toNat_ofNat (show s0 * 4 + s1 / 16 < 256 by omega),
+    toNat_ofNat (show s1 % 16 * 16 + s2 / 4 < 256 by omega),
+    toNat_ofNat (show s2 % 4 * 64 + s3 < 256 by omega)]
+  rw [show ((s0 * 4 + s1 / 16) * 65536 + (s1 % 16 * 16 + s2 / 4) * 256 + (s2 % 4 * 64 + s3))
+      / 262144 = s0 by omega,
+    show ((s0 * 4 + s1 / 16) * 65536 + (s1 % 16 * 16 + s2 / 4) * 256 + (s2 % 4 * 64 + s3))
+      / 4096 % 64 = s1 by omega,
+    show ((s0 * 4 + s1 / 16) * 65536 + (s1 % 16 * 16 + s2 / 4) * 256 + (s2 % 4 * 64 + s3))
+      / 64 % 64 = s2 by omega,
+    show ((s0 * 4 + s1 / 16) * 65536 + (s1 % 16 * 16 + s2 / 4) * 256 + (s2 % 4 * 64 + s3))
+      % 64 = s3 by omega]
+
+/--
+Every character list the decoder accepts is the encoding of what it hands back. The claim matters
+more here than for base64url because padding gives a permissive decoder more room: `=` in the wrong
+place, a padded group that is not the last, or padding longer than the final group is short would
+each give a byte string a second spelling. None of them is `encode` of anything, so none of them is
+accepted.
+
+`decode cs = some bs` is the decoder succeeding on `cs` and answering `bs`, and `encode bs = cs`
+says `cs` was that answer's own encoding. The induction is over `decode.induct`, whose cases are the
+decoder's arms: the empty input, the four characters that are the whole input, a full group with
+something after it, and the lengths that are not a multiple of four, where the hypothesis is
+contradictory. The `=` cases are reached through `finalGroup`, and the trailing sextet's spare bits
+are pinned by `oneByte` and `twoBytes` on the way through.
+-/
+theorem encode_decode (cs : List Char) (bs : List UInt8) (h : decode cs = some bs) :
+    encode bs = cs := by
+  induction cs using decode.induct generalizing bs with
+  | case1 => simp [decode] at h; subst h; rfl
+  | case2 x y z w =>
+    simp only [decode_4, finalGroup] at h
+    split at h
+    · rename_i hw
+      obtain rfl : w = pad := by simpa using hw
+      split at h
+      · rename_i hz
+        obtain rfl : z = pad := by simpa using hz
+        split at h
+        · rename_i s0 s1 h0 h1
+          obtain ⟨hs0, hx⟩ := decodeChar_sound h0
+          obtain ⟨hs1, hy⟩ := decodeChar_sound h1
+          simp only [oneByte] at h
+          split at h
+          · rename_i hq
+            have hq' : s1 % 16 = 0 := by simpa using hq
+            obtain rfl : bs = [UInt8.ofNat (s0 * 4 + s1 / 16)] := (Option.some.inj h).symm
+            simp only [encode, toNat_ofNat (show s0 * 4 + s1 / 16 < 256 by omega)]
+            rw [show (s0 * 4 + s1 / 16) / 4 = s0 by omega,
+              show (s0 * 4 + s1 / 16) % 4 * 16 = s1 by omega, hx, hy]
+          · simp at h
+        · simp at h
+      · split at h
+        · rename_i s0 s1 s2 h0 h1 h2
+          obtain ⟨hs0, hx⟩ := decodeChar_sound h0
+          obtain ⟨hs1, hy⟩ := decodeChar_sound h1
+          obtain ⟨hs2, hz⟩ := decodeChar_sound h2
+          simp only [twoBytes] at h
+          split at h
+          · rename_i hq
+            have hq' : s2 % 4 = 0 := by simpa using hq
+            obtain rfl :
+                bs = [UInt8.ofNat (s0 * 4 + s1 / 16), UInt8.ofNat (s1 % 16 * 16 + s2 / 4)] :=
+              (Option.some.inj h).symm
+            simp only [encode, toNat_ofNat (show s0 * 4 + s1 / 16 < 256 by omega),
+              toNat_ofNat (show s1 % 16 * 16 + s2 / 4 < 256 by omega)]
+            rw [show ((s0 * 4 + s1 / 16) * 256 + (s1 % 16 * 16 + s2 / 4)) / 1024 = s0 by omega,
+              show ((s0 * 4 + s1 / 16) * 256 + (s1 % 16 * 16 + s2 / 4)) / 16 % 64 = s1 by omega,
+              show ((s0 * 4 + s1 / 16) * 256 + (s1 % 16 * 16 + s2 / 4)) % 16 * 4 = s2 by omega,
+              hx, hy, hz]
+          · simp at h
+        · simp at h
+    · simp only [fullGroup] at h
+      split at h
+      · rename_i s0 s1 s2 s3 h0 h1 h2 h3
+        obtain ⟨hs0, hx⟩ := decodeChar_sound h0
+        obtain ⟨hs1, hy⟩ := decodeChar_sound h1
+        obtain ⟨hs2, hz⟩ := decodeChar_sound h2
+        obtain ⟨hs3, hw⟩ := decodeChar_sound h3
+        obtain rfl : bs = threeBytes s0 s1 s2 s3 := (Option.some.inj h).symm
+        rw [show threeBytes s0 s1 s2 s3 = threeBytes s0 s1 s2 s3 ++ []
+            from (List.append_nil _).symm,
+          encode_threeBytes hs0 hs1 hs2 hs3, hx, hy, hz, hw]
+        rfl
+      · simp at h
+  | case3 x y z w rest hne bytes tail hrest hfull ih =>
+    obtain ⟨v, rest', rfl⟩ : ∃ v rest', rest = v :: rest' := by
+      cases rest with
+      | nil => exact absurd rfl hne
+      | cons v r => exact ⟨v, r, rfl⟩
+    rw [decode_5, hfull, hrest] at h
+    obtain rfl : bs = bytes ++ tail := (Option.some.inj h).symm
+    simp only [fullGroup] at hfull
+    split at hfull
+    · rename_i s0 s1 s2 s3 h0 h1 h2 h3
+      obtain ⟨hs0, hx⟩ := decodeChar_sound h0
+      obtain ⟨hs1, hy⟩ := decodeChar_sound h1
+      obtain ⟨hs2, hz⟩ := decodeChar_sound h2
+      obtain ⟨hs3, hw⟩ := decodeChar_sound h3
+      obtain rfl : bytes = threeBytes s0 s1 s2 s3 := (Option.some.inj hfull).symm
+      rw [encode_threeBytes hs0 hs1 hs2 hs3, hx, hy, hz, hw, ih tail hrest]
+    · simp at hfull
+  | case4 x y z w rest hne hno ih =>
+    obtain ⟨v, rest', rfl⟩ : ∃ v rest', rest = v :: rest' := by
+      cases rest with
+      | nil => exact absurd rfl hne
+      | cons v r => exact ⟨v, r, rfl⟩
+    rw [decode_5] at h
+    split at h
+    · exact (hno _ _ ‹_› ‹_›).elim
+    · simp at h
+  | case5 t hne h4 h5 =>
+    exfalso
+    cases t with
+    | nil => exact hne rfl
+    | cons a t1 =>
+      cases t1 with
+      | nil => simp [decode] at h
+      | cons b t2 =>
+        cases t2 with
+        | nil => simp [decode] at h
+        | cons c t3 =>
+          cases t3 with
+          | nil => simp [decode] at h
+          | cons d t4 => exact h5 a b c d t4 rfl
+
+
 end Base64
 
 end Tests.Encodings

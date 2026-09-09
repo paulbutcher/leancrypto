@@ -6,7 +6,7 @@ module
 
 @[expose] public section
 
-namespace Crypto
+namespace Leancrypto
 
 /--
 Compares every byte. `==` stops at the first difference, which reports how long a correct prefix
@@ -23,4 +23,4 @@ def bytesEqual (a b : ByteArray) : Bool :=
   a.size == b.size &&
     (List.zipWith (fun x y => x == y) a.data.toList b.data.toList).foldl Bool.and true
 
-end Crypto
+end Leancrypto

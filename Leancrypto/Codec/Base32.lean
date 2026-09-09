@@ -18,7 +18,7 @@ one accepted encoding.
 
 @[expose] public section
 
-namespace Codec.Base32
+namespace Leancrypto.Codec.Base32
 
 def alphabet : List Char := "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toList
 
@@ -122,4 +122,4 @@ being typed into. -/
 def decodeString (s : String) : Option ByteArray :=
   (decode (s.toList.filter fun c => c != '-' && !c.isWhitespace)).map fun bytes => ⟨bytes.toArray⟩
 
-end Codec.Base32
+end Leancrypto.Codec.Base32

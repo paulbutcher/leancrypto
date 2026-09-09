@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-import Crypto.Compare
+import Leancrypto.Compare
 
 /-!
 Absence of an early exit is not a property a theorem here can state, so what is proved is the
@@ -13,7 +13,7 @@ leaked nothing and also accepted the wrong bytes would pass the eye and fail the
 -/
 
 namespace Tests.Compare
-open Crypto
+open Leancrypto
 
 /--
 Folding `Bool.and` over a list of booleans is the conjunction of the accumulator with every element.

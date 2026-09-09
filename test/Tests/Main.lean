@@ -12,7 +12,8 @@ vectors, whose value is agreement with a constant no proof could establish.
 -/
 
 public def main : IO UInt32 := do
-  let checks := Tests.Vectors.checks ++ Tests.RsaVectors.checks ++ Tests.Der.checks
+  let checks := Tests.Vectors.checks ++ Tests.RsaVectors.checks ++ Tests.Pkcs1Cavp.checks
+    ++ Tests.PssCavp.checks ++ Tests.PssBlocks.checks ++ Tests.Der.checks ++ Tests.DerWriter.checks
   let failed := checks.filter fun (_, passed) => !passed
   for (name, _) in failed do
     IO.eprintln s!"FAILED: {name}"

@@ -4,11 +4,11 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Crypto.Compare
-public import Crypto.Sha256
+public import Leancrypto.Compare
+public import Leancrypto.Sha2
 
 /-!
-RSASSA-PKCS1-v1_5 signature verification with SHA-256 (RFC 8017 §8.2.2).
+RSASSA-PKCS1-v1_5 signature verification over SHA-256, SHA-384 or SHA-512 (RFC 8017 §8.2.2).
 
 Everything here takes public inputs only: a public key, a message somebody sent, and a signature
 somebody made. There is no secret, so there is nothing for a timing signal to leak, and nothing
@@ -24,11 +24,13 @@ recovered block, stepping over whatever padding is found and reading a digest of
 Bleichenbacher forgery of 2006: with a low exponent an attacker can construct a block that a
 lenient parser accepts without the private key. It has been reimplemented independently many
 times since. Encoding the expectation leaves no parser to be lenient.
+
+RSA-PSS is `Leancrypto.Rsa.Pss`, in a module of its own because its discipline is not this one.
 -/
 
 @[expose] public section
 
-namespace Crypto.Rsa
+namespace Leancrypto.Rsa
 
 /-- No invariant a caller can break, because there is none to hold: both fields are public and
 any pair of naturals is a well-formed thing to attempt a verification with. -/
@@ -68,17 +70,31 @@ comparison against the expected block depends on, and a value too large for the 
 truncated at the top rather than overflowing it. -/
 def bytesOfNat (length n : Nat) : ByteArray := ⟨(digitsOfNat length n []).toArray⟩
 
-/-- The `DigestInfo` prefix for SHA-256: `SEQUENCE { SEQUENCE { OID 2.16.840.1.101.3.4.2.1, NULL },
-OCTET STRING (32) }`, the 32 bytes of the digest following.
+/-- The `DigestInfo` prefix the digest of a message is written behind: `SEQUENCE { SEQUENCE { OID,
+NULL }, OCTET STRING }`, with the bytes of the digest following.
 
-There is exactly one correct value, so it is written as one. Assembling it with a general DER
-encoder would introduce a second thing capable of producing a different answer. -/
-def digestInfoSha256 : ByteArray :=
-  ⟨#[0x30, 0x31,                                                  -- SEQUENCE, 49 bytes
-     0x30, 0x0d,                                                  -- SEQUENCE, 13 bytes
-     0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01,  -- OID, 9 bytes
-     0x05, 0x00,                                                  -- NULL
-     0x04, 0x20]⟩                                                 -- OCTET STRING, 32 bytes
+RFC 8017 §9.2 gives one correct byte string per algorithm, so they are written out as three.
+Assembling them with a general DER encoder would introduce a second thing capable of producing a
+different answer, and the identifiers differ only in their last OID byte and two lengths. -/
+def digestInfo : Sha2 → ByteArray
+  | .sha256 =>
+    ⟨#[0x30, 0x31,
+       0x30, 0x0d,
+       0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01,
+       0x05, 0x00,
+       0x04, 0x20]⟩
+  | .sha384 =>
+    ⟨#[0x30, 0x41,
+       0x30, 0x0d,
+       0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02,
+       0x05, 0x00,
+       0x04, 0x30]⟩
+  | .sha512 =>
+    ⟨#[0x30, 0x51,
+       0x30, 0x0d,
+       0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03,
+       0x05, 0x00,
+       0x04, 0x40]⟩
 
 /-- Below this, refuse. A caller that genuinely has to verify a signature under a shorter modulus
 needs an entry point that says so in its name, so that no caller reaches the weak behaviour by
@@ -88,18 +104,19 @@ def minModulusBits : Nat := 2048
 /-- `EM = 0x00 || 0x01 || 0xFF…0xFF || 0x00 || DigestInfo || H`, the block RFC 8017 §9.2 says a
 signature over this message must recover. `none` when the modulus leaves no room for the eight
 bytes of padding the standard requires. -/
-def encodedMessage (length : Nat) (message : ByteArray) : Option ByteArray :=
-  let digest := Sha256.hash message
-  let infoLength := digestInfoSha256.size + digest.size
+def encodedMessage (digest : Sha2) (length : Nat) (message : ByteArray) : Option ByteArray :=
+  let hashed := digest.hash message
+  let info := digestInfo digest
+  let infoLength := info.size + hashed.size
   if length < infoLength + 11 then none
   else
     let padding : ByteArray := ⟨Array.replicate (length - infoLength - 3) 0xff⟩
-    some (⟨#[0x00, 0x01]⟩ ++ padding ++ ⟨#[0x00]⟩ ++ digestInfoSha256 ++ digest)
+    some (⟨#[0x00, 0x01]⟩ ++ padding ++ ⟨#[0x00]⟩ ++ info ++ hashed)
 
 /-- The message itself rather than its digest: nothing in the types would connect a digest handed
 in by a caller to the algorithm named in the `DigestInfo` this builds, so a caller hashing with
 the wrong function would get a `true`. -/
-def verifyPkcs1v15Sha256 (key : PublicKey) (message signature : ByteArray) : Bool :=
+def verifyPkcs1v15 (digest : Sha2) (key : PublicKey) (message signature : ByteArray) : Bool :=
   let length := byteLength key.modulus
   if bitLength key.modulus < minModulusBits then false
   else if signature.size != length then false
@@ -109,11 +126,11 @@ def verifyPkcs1v15Sha256 (key : PublicKey) (message signature : ByteArray) : Boo
     -- would make every signature one of many that verify.
     if representative ≥ key.modulus then false
     else
-      match encodedMessage length message with
+      match encodedMessage digest length message with
       | none => false
       | some expected =>
         -- `bytesEqual` rather than `==` for consistency with the rest of the library. Nothing here
         -- needs it: both blocks are derived from public inputs.
         bytesEqual (bytesOfNat length (powMod representative key.exponent key.modulus)) expected
 
-end Crypto.Rsa
+end Leancrypto.Rsa

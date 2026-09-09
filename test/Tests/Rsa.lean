@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-import Crypto.Rsa
+import Leancrypto.Rsa
 
 /-!
 What the verification arithmetic rests on, proved rather than sampled: that square and multiply
@@ -17,7 +17,7 @@ every input rather than for the ones a published suite happens to contain.
 -/
 
 namespace Tests.Rsa
-open Crypto.Rsa
+open Leancrypto.Rsa
 
 /--
 Square and multiply computes the power it stands in for. Verification cannot evaluate
@@ -46,7 +46,7 @@ theorem powMod_eq (base exponent modulus : Nat) :
 /--
 `digitsOfNat` contributes exactly `length` digits, however large the number it is rendering. That is
 what makes the width of a rendered block a property of the requested length alone, which is the form
-the comparison in `verifyPkcs1v15Sha256` needs.
+the comparison in `verifyPkcs1v15` needs.
 
 `digitsOfNat length n tail` puts the big-endian digits of `n` in front of `tail`, and the equation
 says the result is `length` longer than `tail` was. The count does not mention `n`, which is why a
@@ -63,7 +63,7 @@ private theorem digits_length : ∀ (length n : Nat) (tail : List UInt8),
 
 /--
 A number rendered to `length` bytes occupies exactly `length` bytes, whatever its magnitude. The
-comparison in `verifyPkcs1v15Sha256` is against a block of exactly the modulus length, so a
+comparison in `verifyPkcs1v15` is against a block of exactly the modulus length, so a
 rendering that dropped a leading zero would fail every signature rather than accept a wrong one;
 which of those two a width bug causes is worth knowing rather than guessing.
 
@@ -122,7 +122,7 @@ private theorem natOfList_digits : ∀ (length n : Nat),
 /--
 Rendering a number and reading it back are inverse below the width, and above it the top is what is
 lost. Together with `bytesOfNat_size` this is what makes the encode-and-compare check in
-`verifyPkcs1v15Sha256` a comparison of the number the standard names, rather than of some other
+`verifyPkcs1v15` a comparison of the number the standard names, rather than of some other
 number that shares its low bytes.
 
 `bytesOfNat length n` renders `n` big-endian into `length` bytes and `natOfBytes` reads a

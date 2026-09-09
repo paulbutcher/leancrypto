@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-import Codec.Base64
+import Leancrypto.Codec.Base64
 
 /-!
 The vectors of RFC 4648 §10, and the inputs a decoder must refuse.
@@ -15,7 +15,7 @@ with the published spelling, which no round-trip proof establishes.
 -/
 
 namespace Tests.Base64Codec
-open Codec.Base64
+open Leancrypto.Codec.Base64
 
 /-- The projection rather than `String.toUTF8`, which core does not expose, so that the vectors
 below still reduce in the kernel. The two are the same bytes: `toUTF8` is defined as this
@@ -148,7 +148,7 @@ keyed on the digest of a spelling would then hold one value under several keys.
 `"Zh=="` spells the same single byte as `"Zg=="` with a bit set that the encoder never sets, and
 `"Zm9="` differs from `"Zm8="` the same way in the two-byte case; the conditions violated are the
 `s1 % 16 == 0` of `oneByte` and the `s2 % 4 == 0` of `twoBytes`. Both are required to be `none`,
-which is the shape `Codec.Base64Url` refuses for the same reason.
+which is the shape `Leancrypto.Codec.Base64Url` refuses for the same reason.
 -/
 theorem reject_non_canonical : decodeString "Zh==" = none ∧ decodeString "Zm9=" = none := by
   refine ⟨rfl, rfl⟩

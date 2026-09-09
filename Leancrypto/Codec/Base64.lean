@@ -7,7 +7,7 @@ module
 /-!
 Base64 (RFC 4648 §4) with `=` padding, over the standard `+/` alphabet.
 
-This is a different codec from `Codec.Base64Url` rather than a setting on it. The two alphabets
+This is a different codec from `Leancrypto.Codec.Base64Url` rather than a setting on it. The two alphabets
 disagree on two characters, and a decoder that accepted either would hide which one the producer
 used; `-` and `_` are rejected here for that reason. PEM bodies, and the signature fields of the
 payloads this exists for, are written in this alphabet.
@@ -21,7 +21,7 @@ strip them itself would one day forget.
 
 @[expose] public section
 
-namespace Codec.Base64
+namespace Leancrypto.Codec.Base64
 
 def alphabet : List Char :=
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toList
@@ -92,4 +92,4 @@ def encodeString (bytes : ByteArray) : String := String.ofList (encode bytes.dat
 def decodeString (s : String) : Option ByteArray :=
   (decode (s.toList.filter keep)).map fun bytes => ⟨bytes.toArray⟩
 
-end Codec.Base64
+end Leancrypto.Codec.Base64

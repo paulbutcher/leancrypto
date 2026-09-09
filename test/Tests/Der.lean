@@ -4,9 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-import Codec.Base64
-import Codec.Hex
-import Der
+import Leancrypto.Codec.Base64
+import Leancrypto.Codec.Hex
+import Leancrypto.Der
 
 /-!
 The reader against a real certificate, and against copies of it that have been damaged.
@@ -25,7 +25,7 @@ of them would be a reader whose answer for the intact one meant less than it app
 -/
 
 namespace Tests.Der
-open Crypto
+open Leancrypto
 
 private def certificateBody : String :=
   "MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n" ++
@@ -94,14 +94,14 @@ private def certificatePem : String :=
   "-----BEGIN CERTIFICATE-----\n" ++ certificateBody ++ "-----END CERTIFICATE-----\n"
 
 private def bytesOf (base64 : String) : ByteArray :=
-  (Codec.Base64.decodeString base64).getD ⟨#[]⟩
+  (Leancrypto.Codec.Base64.decodeString base64).getD ⟨#[]⟩
 
 private def certificateDer : ByteArray := bytesOf certificateBody
 
 private def spkiDer : ByteArray := bytesOf spkiBody
 
 private def expected : Rsa.PublicKey :=
-  { modulus := Rsa.natOfBytes ((Codec.Hex.decodeString expectedModulus).getD ⟨#[]⟩),
+  { modulus := Rsa.natOfBytes ((Leancrypto.Codec.Hex.decodeString expectedModulus).getD ⟨#[]⟩),
     exponent := 65537 }
 
 /-- One byte replaced, everything else as issued. -/
