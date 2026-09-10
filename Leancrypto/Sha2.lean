@@ -248,15 +248,17 @@ def Sha2.hash : Sha2 → ByteArray → ByteArray
   | .sha512 => Sha512.hash
 
 /-- The digest length in bytes. That this agrees with `hash` is checked by the vectors, which
-compare the whole digest; no theorem here states it. -/
-def Sha2.size : Sha2 → Nat
+compare the whole digest; no theorem here states it. Exposed because a consumer reasoning about
+a buffer it fills needs to reduce it. -/
+@[expose] def Sha2.size : Sha2 → Nat
   | .sha256 => 32
   | .sha384 => 48
   | .sha512 => 64
 
 /-- The compression block in bytes, which HMAC pads its key to. The 384 and 512 digests share a
-block twice the width of the 256 one, so this is not a constant and nothing may treat it as one. -/
-def Sha2.blockSize : Sha2 → Nat
+block twice the width of the 256 one, so this is not a constant and nothing may treat it as one.
+Exposed because a consumer sizing a key buffer needs to reduce it. -/
+@[expose] def Sha2.blockSize : Sha2 → Nat
   | .sha256 => 64
   | .sha384 => 128
   | .sha512 => 128

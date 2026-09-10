@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.1] - 2026-09-10
+
+* `Sha2.size` and `Sha2.blockSize` expose their bodies, so a consumer can reduce them in a proof
+
 ## [0.4.0] - 2026-09-09
 
 * Every module and namespace moves under `Leancrypto`, and the three libraries become one
