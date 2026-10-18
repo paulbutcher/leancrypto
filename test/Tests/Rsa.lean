@@ -36,10 +36,10 @@ theorem powMod_eq (base exponent modulus : Nat) :
   induction base, exponent using powMod.induct (modulus := modulus) with
   | case1 base => rw [powMod.eq_def]; simp
   | case2 base exponent hne heven ih =>
-    rw [powMod.eq_def, if_neg hne, if_pos heven, ih, ← Nat.pow_mod, ← Nat.pow_two,
+    rw [powMod.eq_def, ite_eq_right hne, ite_eq_left heven, ih, ← Nat.pow_mod, ← Nat.pow_two,
       ← Nat.pow_mul, show 2 * (exponent / 2) = exponent by omega]
   | case3 base exponent hne hodd ih =>
-    rw [powMod.eq_def, if_neg hne, if_neg hodd, ih, ← Nat.pow_mod, ← Nat.pow_two,
+    rw [powMod.eq_def, ite_eq_right hne, ite_eq_right hodd, ih, ← Nat.pow_mod, ← Nat.pow_two,
       ← Nat.pow_mul, Nat.mod_mul_mod, ← Nat.pow_succ, Nat.succ_eq_add_one,
       show 2 * (exponent / 2) + 1 = exponent by omega]
 
