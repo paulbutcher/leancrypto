@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.2] - 2026-10-19
+
+* Chore: bump dependencies
+
 ## [0.4.1] - 2026-09-10
 
 * `Sha2.size` and `Sha2.blockSize` expose their bodies, so a consumer can reduce them in a proof
